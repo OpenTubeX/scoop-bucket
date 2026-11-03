@@ -32,10 +32,10 @@ as **OpenTubeX Nightly** in the Start menu.
 
 ## Your data
 
-Both packages use the portable OpenTubeX build. Scoop keeps its data in
+Both packages use the portable OpenTubeX build. Scoop keeps OpenTubeX's data in
 `persist\opentubex\OpenTubeX-data` or `persist\opentubex-nightly\OpenTubeX-data`
-inside your Scoop directory, so updates keep your settings. The stable and
-nightly packages have separate data and can be installed side by side. To move
+inside your Scoop directory, so updates keep your settings. You can install the
+stable and nightly packages side by side, and each keeps its own data. To move
 your data between them, use **Export backup** in one and **Import backup** in
 the other, under **Settings → Data & Storage**.
 
