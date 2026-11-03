@@ -1,0 +1,111 @@
+name: Update manifests
+
+on:
+  repository_dispatch:
+    types: [opentubex-release, opentubex-nightly]
+  workflow_dispatch:
+    inputs:
+      releaseTag:
+        description: Release tag (defaults to the latest stable release)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-manifests
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ steps.update.outputs.apps }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Resolve release
+        id: update
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.client_payload.tag || inputs.releaseTag }}
+        run: |
+          python3 -m unittest discover -s tests
+          python3 scripts/update.py ${TAG:+"$TAG"}
+          apps="$(git diff --name-only -- bucket | jq --raw-input --slurp --compact-output \
+            'split("\n") | map(select(length > 0) | ltrimstr("bucket/") | rtrimstr(".json"))')"
+          echo "apps=$apps" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.update.outputs.apps != '[]'
+        with:
+          name: manifests
+          path: bucket/
+
+  test:
+    needs: prepare
+    if: needs.prepare.outputs.apps != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2025, windows-11-arm]
+        app: ${{ fromJSON(needs.prepare.outputs.apps) }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: manifests
+          path: bucket
+      - run: ./scripts/test-install.ps1 -App '${{ matrix.app }}'
+
+  publish:
+    needs: [prepare, test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: manifests
+          path: bucket
+      - name: Publish tested manifests with GitHub-signed commits
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPS: ${{ needs.prepare.outputs.apps }}
+        run: |
+          python3 - <<'PY'
+          import base64
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+
+          names = {'opentubex': 'OpenTubeX', 'opentubex-nightly': 'OpenTubeX Nightly'}
+          for app in json.loads(os.environ['APPS']):
+              path = f'bucket/{app}.json'
+              endpoint = f'repos/{os.environ["GITHUB_REPOSITORY"]}/contents/{path}'
+              current = json.loads(subprocess.check_output(['gh', 'api', endpoint]))
+              source = Path(path).read_bytes()
+              if source == base64.b64decode(current['content']):
+                  print(f'{path} is already current')
+                  continue
+              # Do not overwrite a manifest changed while the Windows checks were running.
+              expected = subprocess.check_output(['git', 'rev-parse', f'HEAD:{path}'], text=True).strip()
+              if current['sha'] != expected:
+                  raise SystemExit(f'{path} changed during validation; rerun this workflow')
+              version = json.loads(source)['version']
+              payload = {'message': f'chore: update {names[app]} to {version}',
+                         'content': base64.b64encode(source).decode(), 'sha': current['sha']}
+              subprocess.run(['gh', 'api', '--method', 'PUT', endpoint, '--input', '-', '--silent'],
+                             input=json.dumps(payload), text=True, check=True)
+          PY
