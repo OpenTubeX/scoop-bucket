@@ -38,7 +38,7 @@ class StableUpdateTests(unittest.TestCase):
             "hash": "a" * 64,
         })
         self.assertEqual(result["architecture"]["arm64"]["hash"], "b" * 64)
-        self.assertEqual(result["persist"], "OpenTubeX-data")
+        self.assertEqual(result["pre_install"], self.manifest["pre_install"])
         self.assertEqual(updater.update(result, release()), result)
 
     def test_rejects_unpublished_and_nightly_releases(self):

@@ -31,12 +31,20 @@ function Invoke-Scoop {
 Invoke-Scoop install (Join-Path $PSScriptRoot "..\bucket\$App.json")
 
 $appDirectory = Join-Path $scoop "apps\$App\current"
-$persistDirectory = Join-Path $scoop "persist\$App\OpenTubeX-data"
 $executable = Join-Path $appDirectory 'OpenTubeX.exe'
+$dataDirectory = Join-Path $env:APPDATA 'OpenTubeX'
+$protocolCommand = 'HKCU:\Software\Classes\opentubex\shell\open\command'
 
-foreach ($path in $executable, (Join-Path $appDirectory 'portable.marker'), (Join-Path $appDirectory 'resources\app.asar')) {
+foreach ($path in $executable, (Join-Path $appDirectory 'resources\app.asar')) {
   if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
     throw "Missing $path"
+  }
+}
+
+# The manifest removes the portable mode files so OpenTubeX runs as an installed app.
+foreach ($name in 'portable.marker', 'version.dll', '.interposer', 'OpenTubeX-data') {
+  if (Test-Path -LiteralPath (Join-Path $appDirectory $name)) {
+    throw "Portable mode file was not removed: $name"
   }
 }
 
@@ -48,20 +56,25 @@ if ($machine -ne $expectedMachine) {
   throw ('OpenTubeX.exe targets machine 0x{0:X4}, expected 0x{1:X4}' -f $machine, $expectedMachine)
 }
 
-$data = Get-Item -LiteralPath (Join-Path $appDirectory 'OpenTubeX-data')
-if ($data.LinkType -ne 'Junction' -or @($data.Target)[0] -ne $persistDirectory) {
-  throw "OpenTubeX-data is not linked to $persistDirectory"
+# Leave existing data and link registrations alone when this runs outside CI.
+$dataExisted = Test-Path -LiteralPath $dataDirectory
+$protocolExisted = Test-Path -LiteralPath $protocolCommand
+
+function Test-Started {
+  if (-not (Test-Path -LiteralPath (Join-Path $dataDirectory 'Local State'))) { return $false }
+  $command = (Get-ItemProperty -LiteralPath $protocolCommand -ErrorAction Ignore).'(default)'
+  return $command -like "*\apps\$App\*"
 }
 
 $process = Start-Process -FilePath $executable -PassThru
 try {
   $deadline = (Get-Date).AddMinutes(2)
-  while (-not (Test-Path -LiteralPath (Join-Path $persistDirectory 'Local State'))) {
+  while (-not (Test-Started)) {
     if ($process.HasExited) {
       throw "OpenTubeX exited early with code $($process.ExitCode)"
     }
     if ((Get-Date) -gt $deadline) {
-      throw 'OpenTubeX did not write its data to the persisted directory'
+      throw "OpenTubeX did not store its data in $dataDirectory and register opentubex:// links"
     }
     Start-Sleep -Milliseconds 500
   }
@@ -70,13 +83,17 @@ try {
   Wait-Process -Name OpenTubeX -Timeout 30 -ErrorAction SilentlyContinue
 }
 
-foreach ($path in (Join-Path $env:APPDATA 'OpenTubeX'), (Join-Path $env:LOCALAPPDATA 'OpenTubeX')) {
-  if (Test-Path -LiteralPath $path) {
-    throw "OpenTubeX wrote data outside its portable directory: $path"
-  }
-}
-
-Invoke-Scoop uninstall $App --purge
+Invoke-Scoop uninstall $App
 if (Test-Path -LiteralPath (Join-Path $scoop "apps\$App")) {
   throw "Scoop did not remove $App"
+}
+if (-not (Test-Path -LiteralPath (Join-Path $dataDirectory 'Local State'))) {
+  throw 'Uninstalling removed the OpenTubeX data'
+}
+
+if (-not $dataExisted) {
+  Remove-Item -LiteralPath $dataDirectory -Recurse -Force
+}
+if (-not $protocolExisted) {
+  Remove-Item -LiteralPath 'HKCU:\Software\Classes\opentubex' -Recurse -Force
 }

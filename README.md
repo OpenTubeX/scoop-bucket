@@ -3,6 +3,10 @@
 This repository distributes [OpenTubeX](https://github.com/OpenTubeX/OpenTubeX)
 through [Scoop](https://scoop.sh/) on Windows. It supports x64 and ARM64.
 
+The packages use the files from the official portable ZIP releases. Scoop
+removes the portable mode files during installation, so OpenTubeX runs as a
+regular app with notifications and `opentubex://` links.
+
 ## Install OpenTubeX
 
 With Scoop installed, add the bucket and install the stable release:
@@ -32,12 +36,12 @@ as **OpenTubeX Nightly** in the Start menu.
 
 ## Your data
 
-Both packages use the portable OpenTubeX build. Scoop keeps OpenTubeX's data in
-`persist\opentubex\OpenTubeX-data` or `persist\opentubex-nightly\OpenTubeX-data`
-inside your Scoop directory, so updates keep your settings. You can install the
-stable and nightly packages side by side, and each keeps its own data. To move
-your data between them, use **Export backup** in one and **Import backup** in
-the other, under **Settings → Data & Storage**.
+Scoop installs OpenTubeX as a regular app, so it keeps its settings and data in
+`%APPDATA%\OpenTubeX` like the Windows installer does. Updates and uninstalls
+leave that folder in place.
+
+The stable and nightly packages use the same folder. Install only one of them;
+to switch, uninstall one and install the other.
 
 ## Uninstall OpenTubeX
 
@@ -45,7 +49,7 @@ the other, under **Settings → Data & Storage**.
 scoop uninstall opentubex  # or opentubex-nightly
 ```
 
-Add `--purge` to delete your OpenTubeX data as well.
+Delete `%APPDATA%\OpenTubeX` as well to remove your OpenTubeX data.
 
 ## How publishing works
 
@@ -61,8 +65,7 @@ the application repository sends an `opentubex-release` or
    nightly releases. The nightly manifest keeps its version when the release is
    older than the build it already offers;
 3. installs each changed manifest with Scoop on x64 and ARM64 runners, starts
-   OpenTubeX, checks that its data lands in the persisted directory, and
-   uninstalls it;
+   OpenTubeX, checks that it runs as an installed app, and uninstalls it;
 4. publishes the tested manifests with GitHub-signed commits.
 
 The workflow reuses the official release packages without rebuilding the app.

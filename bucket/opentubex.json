@@ -13,11 +13,14 @@
             "hash": "6418f566ae4f2815dbd20743f41f7f973fc96f51156d3d289b950538d614e888"
         }
     },
+    "pre_install": [
+        "# Run as an installed app, not in portable mode.",
+        "Remove-Item -LiteralPath \"$dir\\portable.marker\", \"$dir\\version.dll\", \"$dir\\.interposer\", \"$dir\\LANCommander.Interposer.LICENSE.txt\" -Recurse -Force -ErrorAction Ignore"
+    ],
     "shortcuts": [
         [
             "OpenTubeX.exe",
             "OpenTubeX"
         ]
-    ],
-    "persist": "OpenTubeX-data"
+    ]
 }
