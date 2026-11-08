@@ -49,7 +49,9 @@ to switch, uninstall one and install the other.
 scoop uninstall opentubex  # or opentubex-nightly
 ```
 
-Delete `%APPDATA%\OpenTubeX` as well to remove your OpenTubeX data.
+Uninstalling also removes the `opentubex://` link registration if it points
+to that package. Delete `%APPDATA%\OpenTubeX` as well to remove your OpenTubeX
+data.
 
 ## How publishing works
 
@@ -66,7 +68,8 @@ the application repository sends an `opentubex-release` or
    older than the build it already offers;
 3. installs each changed manifest with Scoop on x64 and ARM64 runners, starts
    OpenTubeX, checks that it runs as an installed app, and uninstalls it;
-4. publishes the tested manifests with GitHub-signed commits.
+4. publishes the tested manifests in one GitHub-signed commit, provided the
+   branch has not changed since they were tested.
 
 The workflow reuses the official release packages without rebuilding the app.
 It can also be run manually. Without a tag, it picks up the latest stable

@@ -56,9 +56,8 @@ if ($machine -ne $expectedMachine) {
   throw ('OpenTubeX.exe targets machine 0x{0:X4}, expected 0x{1:X4}' -f $machine, $expectedMachine)
 }
 
-# Leave existing data and link registrations alone when this runs outside CI.
+# Leave existing data alone when this runs outside CI.
 $dataExisted = Test-Path -LiteralPath $dataDirectory
-$protocolExisted = Test-Path -LiteralPath $protocolCommand
 
 function Test-Started {
   if (-not (Test-Path -LiteralPath (Join-Path $dataDirectory 'Local State'))) { return $false }
@@ -90,10 +89,10 @@ if (Test-Path -LiteralPath (Join-Path $scoop "apps\$App")) {
 if (-not (Test-Path -LiteralPath (Join-Path $dataDirectory 'Local State'))) {
   throw 'Uninstalling removed the OpenTubeX data'
 }
+if (Test-Path -LiteralPath 'HKCU:\Software\Classes\opentubex') {
+  throw 'Uninstalling did not remove the opentubex:// link registration'
+}
 
 if (-not $dataExisted) {
   Remove-Item -LiteralPath $dataDirectory -Recurse -Force
-}
-if (-not $protocolExisted) {
-  Remove-Item -LiteralPath 'HKCU:\Software\Classes\opentubex' -Recurse -Force
 }
