@@ -81,8 +81,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           APPS: ${{ needs.prepare.outputs.apps }}
-          EXPECTED_HEAD: ${{ needs.prepare.outputs.revision }}
+          TESTED_HEAD: ${{ needs.prepare.outputs.revision }}
         run: |
+          set -euo pipefail
+          # Keep commits that landed during testing unless they touched the manifests being published.
+          EXPECTED_HEAD="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_REF_NAME}" --jq .sha)"
+          changed="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${TESTED_HEAD}...${EXPECTED_HEAD}" --jq '.files[].filename')"
+          if grep --fixed-strings --line-regexp --file=<(jq -r '.[] | "bucket/\(.).json"' <<< "$APPS") <<< "$changed"; then
+            echo "These manifests changed on ${GITHUB_REF_NAME} after they were tested." >&2
+            exit 1
+          fi
+          export EXPECTED_HEAD
           python3 - <<'PY'
           import base64
           import json
@@ -110,5 +119,5 @@ jobs:
           }
           Path('commit-request.json').write_text(json.dumps(request))
           PY
-          # GitHub signs this commit and rejects it if the branch moved since the manifests were tested.
+          # GitHub signs this commit and rejects it if the branch moved since the check above.
           gh api graphql --input commit-request.json
